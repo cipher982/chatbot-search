@@ -1,21 +1,22 @@
 import logging
-
-from fastapi import FastAPI, HTTPException
-from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
-from pydantic import BaseModel
-from langchain.agents import initialize_agent, AgentType
-from langchain.tools import Tool
-from langchain_openai import ChatOpenAI
 import os
-import dotenv
 
 # Add these imports
-from typing import Annotated, TypedDict
-from langgraph.graph import StateGraph, END, START
-from langgraph.prebuilt import ToolNode
+from typing import Annotated
 from typing import TypedDict
 
+import dotenv
+from fastapi import FastAPI
+from fastapi import HTTPException
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from langchain.tools import Tool
+from langchain_openai import ChatOpenAI
+from langgraph.graph import END
+from langgraph.graph import START
+from langgraph.graph import StateGraph
+from langgraph.prebuilt import ToolNode
+from pydantic import BaseModel
 
 dotenv.load_dotenv()
 
@@ -23,7 +24,6 @@ logging.basicConfig(level=logging.INFO)
 
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
-
 
 
 def add_messages(current: list, new: list) -> list:
@@ -35,6 +35,7 @@ class ChatRequest(BaseModel):
     message: str
     search_results: dict | None = None
 
+
 class State(TypedDict):
     messages: Annotated[list, add_messages]
 
@@ -45,8 +46,6 @@ def tools_condition(state: State) -> str:
     if "NEED_SEARCH:" in last_message:
         return "tools"
     return END
-
-
 
 
 def web_search(query: str) -> str:
@@ -70,11 +69,12 @@ tools = [
 ]
 
 
-
 graph_builder = StateGraph(State)
+
 
 def chatbot(state: State):
     return {"messages": [llm.bind_tools(tools).invoke(state["messages"])]}
+
 
 # Create tool node to handle searches
 tool_node = ToolNode(tools=tools)
@@ -84,11 +84,7 @@ graph_builder.add_node("chatbot", chatbot)
 graph_builder.add_node("tools", tool_node)
 
 # Add conditional routing
-graph_builder.add_conditional_edges(
-    "chatbot",
-    tools_condition,
-    {"tools": "tools", END: END}
-)
+graph_builder.add_conditional_edges("chatbot", tools_condition, {"tools": "tools", END: END})
 
 # Connect tool back to chatbot
 graph_builder.add_edge("tools", "chatbot")
@@ -96,7 +92,6 @@ graph_builder.add_edge(START, "chatbot")
 
 # Compile graph
 agent = graph_builder.compile()
-
 
 
 @app.get("/")
