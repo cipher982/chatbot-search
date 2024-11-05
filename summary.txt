@@ -1,0 +1,17 @@
+Project Summary and Original Idea
+
+The goal of this project is to build a web app that has a chatbot that has a url request too, or web search.
+but the important part is that all internet requests from the chatbot appear to come from the user, not the server.
+
+Initial Question and Discussion
+
+The initial question was around how to implement such functionality. Specifically, the question was whether it would be possible to “spoof” the user’s IP address so that any request to an external site would appear to originate from the user’s IP rather than the server’s IP. During the discussion, we clarified that:
+	•	Instead, the best approach is to use client-side execution via JavaScript, so the requests are actually made from the user’s browser, naturally using their IP address.
+	•	By embedding a JavaScript function within the webpage, we can have the client’s browser directly query an IP-checking service, ensuring the request originates from the user.
+
+
+history:
+ - this started because openai has a new search web feature in their chatgpt website, so that when a user says "what is my ip address" or "whats my location" it will call one of those websites, which appears to originate from the user, so my thought is that the search requests are actually routing through the users internet somehow, not a direct request from the openai server.
+
+ current status:
+ We're building a chat interface where users can ask questions that might require web searches. Instead of having the server perform these searches (which would use the server's IP and location), we're implementing a two-step process: First, the LLM receives the user's question and determines what web searches are needed. Then, the client's browser performs these searches using JavaScript (meaning they'll originate from the user's IP/location/browser), and sends the results back to the LLM for final processing. This approach ensures that any web requests appear to come from the actual user rather than our server, which could be important for getting location-specific results or avoiding rate limits that might affect a server making many requests from a single IP.

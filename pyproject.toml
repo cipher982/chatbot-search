@@ -1,0 +1,35 @@
+[project]
+name = "ip-test"
+version = "0.1.0"
+description = "AI Chatbot with web search"
+readme = "README.md"
+requires-python = ">=3.12"
+dependencies = [
+    "langchain>=0.3.7",
+    "langchain-openai>=0.2.5",
+    "fastapi>=0.115.4",
+    "python-dotenv>=1.0.1",
+    "uvicorn>=0.32.0",
+    "langgraph>=0.2.45",
+]
+
+
+[tool.ruff]
+line-length = 120
+
+[tool.ruff.lint]
+select = ["I", "E", "F", "Q000"]
+ignore = []
+
+[tool.ruff.lint.isort]
+force-single-line = true
+
+[tool.ruff.lint.flake8-quotes]
+docstring-quotes = "double"
+inline-quotes = "double"
+multiline-quotes = "double"
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"
+line-ending = "lf"
