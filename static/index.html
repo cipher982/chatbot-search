@@ -76,6 +76,12 @@
             return await response.json();
         }
 
+        function generateThreadId() {
+            return "thread-" + Math.random().toString(36).substring(2, 15) + 
+                   Math.random().toString(36).substring(2, 15);
+        }
+        const threadId = generateThreadId();
+
 
         async function sendMessage() {
             const input = document.getElementById("userInput");
@@ -86,29 +92,28 @@
             input.value = "";
 
             try {
-                // First ask the LLM what searches it needs
                 const response = await fetch("/chat", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ 
                         message,
-                        searchResults: {} 
+                        searchResults: {},
+                        thread_id: threadId 
                     })
                 });
                 
                 const data = await response.json();
                 
-                // If LLM needs web searches, perform them client-side
                 if (data.needs_search) {
                     const searchResults = await performWebSearch(data.search_query);
                     
-                    // Send results back to LLM
                     const finalResponse = await fetch("/chat", {
                         method: "POST",
                         headers: { "Content-Type": "application/json" },
                         body: JSON.stringify({ 
                             message,
-                            searchResults 
+                            searchResults,
+                            thread_id: threadId 
                         })
                     });
                     
