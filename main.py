@@ -56,15 +56,6 @@ class URLRequestTool:
         )
 
 
-# url_request_tool = URLRequestTool()
-# llm = ChatOpenAI(
-#     temperature=0,
-#     api_key=os.getenv("OPENAI_API_KEY"),
-#     model="gpt-4o-mini",
-# )
-# llm_with_tools = llm.bind_tools([url_request_tool])
-
-
 @app.get("/")
 async def read_root():
     return FileResponse("static/index.html")
@@ -110,7 +101,7 @@ async def chat(request: ChatRequest):
             input_messages = [
                 {"role": "user", "content": request.message},
                 {"role": "assistant", "content": None, "tool_calls": [tool_call]},
-                {"role": "tool", "content": url_result["results"], "tool_call_id": tool_call.id},
+                {"role": "tool", "content": url_result, "tool_call_id": tool_call["id"]},
             ]
             final_response = await llm_with_tools.ainvoke(input_messages)
             logging.info(f"Final Response (with tool result): {final_response}")
