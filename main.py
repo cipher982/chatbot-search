@@ -9,7 +9,7 @@ from fastapi.exceptions import RequestValidationError
 from fastapi.responses import FileResponse
 from fastapi.responses import JSONResponse
 from fastapi.staticfiles import StaticFiles
-from langchain.tools import Tool
+from langchain.tools import StructuredTool
 from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
 
@@ -28,19 +28,23 @@ class ChatRequest(BaseModel):
     websocket_id: str
 
 
-class URLRequestTool(Tool):
+class URLRequestTool:
     def __init__(self, websocket: WebSocket):
-        self.websocket = websocket
-        super().__init__(
-            name="url_request",
-            func=self._search,
-            description="Search or fetch content from URLs. Input should be a URL.",
-        )
+        self._websocket = websocket
 
     async def _search(self, query: str) -> str:
-        await self.websocket.send_json({"type": "search_request", "query": query})
-        response = await self.websocket.receive_text()
+        """Search or fetch content from URLs. Input should be a URL."""
+        await self._websocket.send_json({"type": "search_request", "query": query})
+        response = await self._websocket.receive_text()
         return json.loads(response)["results"]
+
+    def get_tool(self) -> StructuredTool:
+        return StructuredTool.from_function(
+            func=self._search,
+            name="url_request",
+            description="Search or fetch content from URLs. Input should be a URL.",
+            coroutine=self._search,
+        )
 
 
 # url_request_tool = URLRequestTool()
@@ -76,7 +80,7 @@ async def chat(request: ChatRequest):
 
     try:
         # Create tool instance with current websocket
-        url_tool = URLRequestTool(websocket)
+        url_tool = URLRequestTool(websocket).get_tool()
 
         # Initialize LLM with tool
         llm = ChatOpenAI(temperature=0, model="gpt-4o-mini")
@@ -84,7 +88,6 @@ async def chat(request: ChatRequest):
 
         # Process message
         response = await llm_with_tools.ainvoke([{"role": "user", "content": request.message}])
-
         return {"response": response.content}
 
     except Exception as e:
