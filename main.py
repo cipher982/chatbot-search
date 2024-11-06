@@ -1,4 +1,4 @@
-import json
+import asyncio
 import logging
 
 import dotenv
@@ -14,7 +14,9 @@ from langchain_openai import ChatOpenAI
 from pydantic import BaseModel
 
 dotenv.load_dotenv()
-logging.basicConfig(level=logging.INFO)
+logging.basicConfig(
+    level=logging.INFO, format="%(asctime)s [%(funcName)s:%(lineno)d] %(levelname)s: %(message)s", datefmt="%H:%M:%S"
+)
 
 app = FastAPI()
 app.mount("/static", StaticFiles(directory="static"), name="static")
@@ -31,20 +33,25 @@ class ChatRequest(BaseModel):
 class URLRequestTool:
     def __init__(self, websocket: WebSocket):
         self._websocket = websocket
+        self._waiting_for_response = False
 
     async def fetch_url(self, query: str) -> str:
-        logging.info(f"tool, Fetching URL: {query}")
-        """Search or fetch content from URLs. Input should be a URL."""
-        await self._websocket.send_json({"type": "search_request", "query": query})
-        response = await self._websocket.receive_text()
-        logging.info(f"tool, Response: {response}")
-        return json.loads(response)["results"]
+        try:
+            logging.info(f"Sending URL request: {query}")
+            await self._websocket.send_json({"type": "url_request", "query": query})
+            logging.info("Waiting for response...")
+            response = await asyncio.wait_for(self._websocket.receive_json(), timeout=10.0)
+            logging.info(f"Received response: {response}")
+            return response["results"]
+        except asyncio.TimeoutError:
+            logging.error("URL request timed out waiting for response")
+            raise HTTPException(status_code=504, detail="URL request timed out")
 
     def get_tool(self) -> StructuredTool:
         return StructuredTool.from_function(
             func=self.fetch_url,
             name="url_request",
-            description="Search or fetch content from URLs. Input should be a URL.",
+            description="Ftch content from URLs. Input should be a URL.",
             coroutine=self.fetch_url,
         )
 
@@ -69,7 +76,7 @@ async def websocket_endpoint(websocket: WebSocket, client_id: str):
     connections[client_id] = websocket
     try:
         while True:
-            await websocket.receive_text()  # Keep connection alive
+            await asyncio.sleep(1)
     finally:
         del connections[client_id]
 
@@ -83,7 +90,8 @@ async def chat(request: ChatRequest):
 
     try:
         # Create tool instance with current websocket
-        tool = URLRequestTool(websocket).get_tool()
+        url_tool = URLRequestTool(websocket)
+        tool = url_tool.get_tool()
         llm = ChatOpenAI(temperature=0, model="gpt-4o-mini")
         llm_with_tools = llm.bind_tools([tool])
 
@@ -95,14 +103,14 @@ async def chat(request: ChatRequest):
         if response.tool_calls:
             logging.info(f"Tool Calls: {response.tool_calls}")
             tool_call = response.tool_calls[0]
-            tool_input = tool_call["args"]["query"]
-            tool_result = await tool.invoke(tool_input)
+            url = tool_call["args"]["query"]
+            url_result = await url_tool.fetch_url(url)
 
             # Get final response with tool results
             input_messages = [
                 {"role": "user", "content": request.message},
                 {"role": "assistant", "content": None, "tool_calls": [tool_call]},
-                {"role": "tool", "content": str(tool_result), "tool_call_id": tool_call.id},
+                {"role": "tool", "content": url_result["results"], "tool_call_id": tool_call.id},
             ]
             final_response = await llm_with_tools.ainvoke(input_messages)
             logging.info(f"Final Response (with tool result): {final_response}")
