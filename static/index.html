@@ -71,18 +71,32 @@
     </div>
 
     <script>
+        const websocketId = "ws-" + Math.random().toString(36).substring(2, 15);
+        const ws = new WebSocket(`ws://${window.location.host}/ws/${websocketId}`);
+
         async function performWebSearch(url) {
-            const response = await fetch(url);
-            return await response.json();
+            try {
+                const proxyUrl = "https://api.allorigins.win/get?url=";
+                const encodedUrl = encodeURIComponent(url);
+                const response = await fetch(proxyUrl + encodedUrl);
+                const data = await response.json();
+                return data.contents;
+            } catch (error) {
+                console.error("Error fetching URL:", error);
+                return `Failed to fetch content: ${error.message}`;
+            }
         }
 
-        function generateThreadId() {
-            return "thread-" + Math.random().toString(36).substring(2, 15) + 
-                   Math.random().toString(36).substring(2, 15);
-        }
-        const threadId = generateThreadId();
-
-
+        ws.onmessage = async function(event) {
+            const data = JSON.parse(event.data);
+            if (data.type === "url_request") {
+                const results = await performWebSearch(data.query);
+                ws.send(JSON.stringify({
+                    type: "url_results",
+                    results: results
+                }));
+            }
+        };
         async function sendMessage() {
             const input = document.getElementById("userInput");
             const message = input.value.trim();
@@ -97,32 +111,20 @@
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify({ 
                         message,
-                        searchResults: {},
-                        thread_id: threadId 
+                        websocket_id: websocketId
                     })
                 });
+
+                if (!response.ok) {
+                    const err = await response.json();
+                    console.error("Error details:", err);
+                    throw err;
+                }
                 
                 const data = await response.json();
-                
-                if (data.needs_search) {
-                    const searchResults = await performWebSearch(data.search_query);
-                    
-                    const finalResponse = await fetch("/chat", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ 
-                            message,
-                            searchResults,
-                            thread_id: threadId 
-                        })
-                    });
-                    
-                    const finalData = await finalResponse.json();
-                    addMessage(finalData.response, "bot");
-                } else {
-                    addMessage(data.response, "bot");
-                }
+                addMessage(data.response, "bot");
             } catch (error) {
+                console.error("Error:", error);
                 addMessage("Sorry, there was an error processing your request.", "bot");
             }
         }
